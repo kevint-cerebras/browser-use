@@ -35,7 +35,10 @@ dist/
 secrets.env
 .env
 .checkout.env
+.marketplace.env
 .browser-use-profile/
+.browser-use-marketplace-profile/
+.scout-marketplace-ui-profile/
 browser_cookies.json
 cookies.json
 gcp-login.json

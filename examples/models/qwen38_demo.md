@@ -116,6 +116,51 @@ explicitly authorizes one submission only after final cart, address, payment,
 delivery, and total verification. Delete `.checkout.env` after the demo to
 restore the default earlier checkout boundary.
 
+## Facebook Marketplace research demo
+
+The macOS launcher opens two isolated Chrome profiles before any agent prompt is
+submitted: a persistent Facebook Marketplace window on the right 75 percent of
+the main display and the prompt UI on the left 25 percent.
+
+```bash
+env -u BROWSER_USE_HEADLESS \
+  UV_CACHE_DIR="$PWD/.uv-cache" \
+  uv run --no-dev examples/models/qwen38_marketplace_demo.py
+```
+
+Sign in to Facebook manually in the right-hand window, then submit the listing
+request in the left-hand prompt window. Marketplace cookies persist in the
+ignored `.browser-use-marketplace-profile` directory. The prompt UI uses its own
+ignored `.scout-marketplace-ui-profile`. The launcher attaches Browser Use over
+localhost CDP port `9223`; it does not use Browserbase or Browser Use Cloud.
+
+Marketplace mode is isolated from `.checkout.env`, so the Amazon purchase demo
+cannot affect it. By default, Marketplace work is read-only. An ignored local
+`.marketplace.env` can explicitly authorize a bounded outreach demo:
+
+```dotenv
+QWEN38_MARKETPLACE_TARGET='YOUR ITEM'
+QWEN38_MARKETPLACE_DESTINATION='CITY, STATE ZIP'
+QWEN38_MARKETPLACE_TOP_COUNT=2
+QWEN38_MARKETPLACE_OFFER_DISCOUNT=2
+QWEN38_MARKETPLACE_MAKE_OFFERS=true
+QWEN38_MARKETPLACE_SEND_MESSAGES=true
+```
+
+With that configuration, the agent verifies US listings that ship to the
+destination, ranks two, offers exactly $2 below each displayed price, and sends
+one concise shipping-dependent offer message per seller. It never discloses a
+street address, contacts more than two sellers, repeats an action, checks out,
+or purchases. The frontend returns “Here are your options” cards with price,
+location, condition, seller rating, delivery, offer status, message status, and
+listing URL. Facebook can limit result visibility, geography, and pagination,
+so the result reports observed coverage and must not claim a provably exhaustive
+US inventory when the interface prevents one.
+
+Quit the two dedicated Chrome windows when finished. `Ctrl+C` in the launcher
+terminal stops the local prompt server but deliberately leaves Chrome open so
+the final Marketplace page can be inspected.
+
 ## Inference recipe
 
 The original fast deployment used Qwen/Qwen3.8-27B-FP8 on two B200 GPUs in US West, tensor parallelism 2, DFlash2 speculative decoding with 8 draft tokens, BF16 KV cache, and one concurrent inference request. Its SGLang source was pinned to `746418a1ec78ff1231e452706ce560bcad787c39` with `trtllm_mha` attention and `flashinfer_trtllm` FP8 GEMM. The context budget was 262,144 tokens. This branch connects to an existing endpoint; it does not provision or deploy GPUs.

@@ -26,7 +26,8 @@ from starlette.responses import FileResponse, JSONResponse
 from starlette.routing import Route
 
 HERE = Path(__file__).resolve().parent
-UI_PATH = HERE / 'qwen38_grokbot.html'
+AMAZON_UI_PATH = HERE / 'qwen38_grokbot.html'
+MARKETPLACE_UI_PATH = HERE / 'qwen38_marketplace.html'
 AGENT_PATH = HERE / 'qwen38_modal.py'
 REPO_ROOT = HERE.parents[1]
 ANSI_RE = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
@@ -44,7 +45,11 @@ NUMBER_WORDS = {
 }
 
 load_dotenv(REPO_ROOT / '.env')
-load_dotenv(REPO_ROOT / '.checkout.env')
+DEMO_MODE = os.getenv('QWEN38_DEMO_MODE', 'amazon').strip().lower()
+if DEMO_MODE == 'amazon':
+	load_dotenv(REPO_ROOT / '.checkout.env')
+elif DEMO_MODE == 'marketplace':
+	load_dotenv(REPO_ROOT / '.marketplace.env')
 
 
 class RunRequest(BaseModel):
@@ -57,6 +62,32 @@ class RunAction(BaseModel):
 	"""Validated control action for an active task."""
 
 	action: Literal['stop', 'close_browser']
+
+
+class MarketplaceActionConfig(BaseModel):
+	"""Validated local-only authorization for bounded Marketplace outreach."""
+
+	target: str = Field(min_length=1, max_length=200)
+	destination: str = Field(min_length=1, max_length=200)
+	top_count: int = Field(ge=1, le=10)
+	offer_discount: float = Field(gt=0, le=1_000)
+	make_offers: bool = False
+	send_messages: bool = False
+
+	@classmethod
+	def from_environment(cls) -> MarketplaceActionConfig | None:
+		"""Load an ignored Marketplace override when all required values exist."""
+		values = {
+			'target': os.getenv('QWEN38_MARKETPLACE_TARGET', '').strip(),
+			'destination': os.getenv('QWEN38_MARKETPLACE_DESTINATION', '').strip(),
+			'top_count': os.getenv('QWEN38_MARKETPLACE_TOP_COUNT', '').strip(),
+			'offer_discount': os.getenv('QWEN38_MARKETPLACE_OFFER_DISCOUNT', '').strip(),
+			'make_offers': os.getenv('QWEN38_MARKETPLACE_MAKE_OFFERS', '').strip(),
+			'send_messages': os.getenv('QWEN38_MARKETPLACE_SEND_MESSAGES', '').strip(),
+		}
+		if not all(values[key] for key in ('target', 'destination', 'top_count', 'offer_discount')):
+			return None
+		return cls.model_validate(values)
 
 
 @dataclass
@@ -81,7 +112,7 @@ RUNS: dict[str, RunState] = {}
 ACTIVE_RUN_ID: str | None = None
 
 
-def shopping_brief(prompt: str) -> dict[str, object]:
+def shopping_brief(prompt: str) -> dict[str, list[dict[str, str]]]:
 	"""Extract only constraints actually present in the submitted request."""
 	lower = prompt.lower()
 	recipients_match = re.search(r'(\d+)\s+(?:girls|boys|kids|children|guests)', lower)
@@ -113,6 +144,8 @@ def shopping_brief(prompt: str) -> dict[str, object]:
 
 def optimized_task(prompt: str) -> str:
 	"""Turn a casual party-shopping request into a verifiable agent brief."""
+	if DEMO_MODE == 'marketplace':
+		return optimized_marketplace_task(prompt)
 	brief = shopping_brief(prompt)
 	metrics = brief['metrics']
 	constraint_lines = (
@@ -131,7 +164,7 @@ def optimized_task(prompt: str) -> str:
 	checkout_override = bool(checkout_address or checkout_item_count or use_saved_card or place_order)
 	if checkout_override:
 		final_checkout_step = (
-			f"10. On final review, re-verify exactly {checkout_item_count or 'the requested number of'} requested "
+			f'10. On final review, re-verify exactly {checkout_item_count or "the requested number of"} requested '
 			'line items, quantities, shipping address, saved payment selection, delivery details, and displayed order '
 			'total. If they all match, click the final Place your order button exactly once. Verify and report the '
 			'resulting Amazon order confirmation; do not buy anything else.'
@@ -181,15 +214,59 @@ SAFETY BOUNDARY
 {safety_boundary} Report selected products, pack math, prices, cart verification, and checkout state."""
 
 
+def optimized_marketplace_task(prompt: str) -> str:
+	"""Turn a Marketplace request into a systematic US listing search and report."""
+	config = MarketplaceActionConfig.from_environment()
+	if config and (config.make_offers or config.send_messages):
+		offer_action = f"""BOUNDED OUTREACH AUTHORIZATION
+This ignored local demo configuration explicitly authorizes outreach for the top {config.top_count} qualifying listings for {config.target} that ship to {config.destination}.
+- Rank qualifying listings by literal product match, confirmed shipping eligibility, condition, seller rating, and value.
+- For each of the top {config.top_count}, calculate an offer exactly ${config.offer_discount:.2f} below the currently displayed listing price. Show the arithmetic before acting. Never offer zero or a negative amount.
+- {'Use Facebook’s formal Make Offer control once per selected listing when it is available.' if config.make_offers else 'Do not use a formal Make Offer control.'}
+- {f'Send exactly one concise message per selected seller: “Hi, would you accept $OFFER for this item? I’m in {config.destination} and would need shipping. Thank you.” Replace $OFFER with the calculated amount.' if config.send_messages else 'Do not message sellers.'}
+- If no formal Offer control exists, the message may carry the proposal, but report that no formal offer was submitted.
+- Before each submission, verify the listing URL, displayed price, calculated offer, shipping availability, and that this seller has not already been contacted. Never contact more than {config.top_count} sellers.
+- Stop and report instead of acting if the price changed, shipping is unavailable or unclear, the item is not a literal match, the seller was already contacted, or any submission state is ambiguous."""
+	else:
+		offer_action = """READ-ONLY MODE
+Do not message sellers, make offers, save listings, reveal contact information, change the account, add anything to a cart, begin checkout, or make a purchase."""
+	return f"""USER REQUEST
+{prompt.strip()}
+
+LOCAL DEMO TARGET
+{f'Search specifically for {config.target} offered in the United States that can ship to {config.destination}.' if config else 'Interpret the requested product and destination literally; do not invent either.'}
+
+MARKETPLACE SEARCH WORKFLOW
+1. Use only Facebook Marketplace. If login, CAPTCHA, passkey, OTP, or another authentication checkpoint appears, stop and ask the user to complete it manually.
+2. Search Marketplace listings available in the United States. Use the widest US radius and shipping/delivery coverage the interface permits. If Marketplace remains location-limited, sample multiple major US regions and state exactly which regions were covered.
+3. Search useful singular, plural, and common-title variants for the requested product. Scroll or paginate until no new qualifying results appear, the site imposes a limit, or the agent step budget is near exhaustion.
+4. Open plausible candidates and verify that each is an actual matching item currently offered for sale and can ship to the configured destination. Exclude unrelated products, parts, wanted ads, rentals, stock photos without an actual item, and pickup-only listings.
+5. Record title, price, condition, location, seller name, seller rating and rating count, delivery/shipping availability, listing URL, and relevant included details. Never infer a missing value; use “Not shown” when Facebook does not expose seller information.
+6. Deduplicate primarily by listing URL, then by matching title, price, location, and seller-visible details. Keep distinct listings from the same seller when they are clearly separate units.
+7. Apply the bounded outreach instructions below, then return the selected options, excluded near-matches, search variants, regions/filters covered, and explicit limitations. Never claim nationwide exhaustiveness when Facebook limits visible results.
+
+{offer_action}
+
+SAFETY BOUNDARY
+Never disclose a street address, email, phone number, credentials, or payment information to a seller. Never purchase, pay, create more than the authorized offers/messages, or navigate away from Facebook Marketplace except for an unavoidable Facebook login checkpoint.
+
+FINAL RESPONSE FORMAT
+Return one tab-separated line per selected listing using the OPTION marker followed by exactly these ten fields:
+OPTION<TAB>title<TAB>price<TAB>location<TAB>condition<TAB>seller name<TAB>seller rating and rating count<TAB>delivery or shipping<TAB>listing URL<TAB>offer amount and submission status<TAB>message status
+Do not put tab characters inside a field. After the options, return COVERAGE<TAB>followed by regions, filters, and title variants searched; LIMITATIONS<TAB>followed by any Facebook visibility limits; and EXCLUDED<TAB>followed by a concise summary of near-matches rejected. If no qualifying listings are visible, return no OPTION lines and explain why in LIMITATIONS. The frontend will supply the “Here are your options” heading."""
+
+
 def snapshot_payload(state: RunState) -> dict[str, object]:
 	"""Serialize run state without exposing environment secrets."""
 	snapshot: dict[str, object] | None = None
 	if state.event_path and state.event_path.is_file():
 		try:
-			snapshot = json.loads(state.event_path.read_text(encoding='utf-8'))
+			loaded_snapshot = json.loads(state.event_path.read_text(encoding='utf-8'))
+			snapshot = loaded_snapshot if isinstance(loaded_snapshot, dict) else None
 			# The real browser is visible in its own window; only send progress text
 			# to the chat UI rather than transferring screenshot bytes on every poll.
-			snapshot.pop('screenshot', None)
+			if snapshot is not None:
+				snapshot.pop('screenshot', None)
 		except (OSError, json.JSONDecodeError):
 			snapshot = None
 	return {
@@ -262,7 +339,8 @@ async def launch_agent(state: RunState) -> None:
 
 
 async def home(_request: Request) -> FileResponse:
-	return FileResponse(UI_PATH)
+	ui_path = MARKETPLACE_UI_PATH if DEMO_MODE == 'marketplace' else AMAZON_UI_PATH
+	return FileResponse(ui_path)
 
 
 async def create_run(request: Request) -> JSONResponse:
@@ -319,7 +397,7 @@ APP = Starlette(
 
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description='Run the Qwen shopping chat harness.')
+	parser = argparse.ArgumentParser(description='Run the Qwen browser-agent chat harness.')
 	parser.add_argument('--host', default='127.0.0.1')
 	parser.add_argument('--port', type=int, default=8765)
 	arguments = parser.parse_args()
