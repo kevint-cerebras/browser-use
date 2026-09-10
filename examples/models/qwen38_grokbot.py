@@ -69,18 +69,21 @@ class MarketplaceVisionConfig(BaseModel):
 
 	target: str = Field(min_length=1, max_length=200)
 	visual_criterion: str = Field(min_length=1, max_length=500)
+	destination: str = Field(min_length=1, max_length=200)
 	max_results: int = Field(default=10, ge=1, le=50)
 
 	@classmethod
-	def from_environment(cls) -> MarketplaceVisionConfig | None:
-		"""Load an ignored Marketplace vision target when configured."""
+	def from_environment(cls) -> MarketplaceVisionConfig:
+		"""Load optional local overrides for the committed Marketplace demo brief."""
 		values = {
-			'target': os.getenv('QWEN38_MARKETPLACE_TARGET', '').strip(),
-			'visual_criterion': os.getenv('QWEN38_MARKETPLACE_VISUAL_CRITERION', '').strip(),
+			'target': os.getenv('QWEN38_MARKETPLACE_TARGET', 'geese statues').strip(),
+			'visual_criterion': os.getenv(
+				'QWEN38_MARKETPLACE_VISUAL_CRITERION',
+				'the goose statue has a clearly visible open beak with a gap between the upper and lower beak',
+			).strip(),
+			'destination': os.getenv('QWEN38_MARKETPLACE_DESTINATION', 'Sunnyvale, CA 94085').strip(),
 			'max_results': os.getenv('QWEN38_MARKETPLACE_MAX_RESULTS', '10').strip(),
 		}
-		if not values['target'] or not values['visual_criterion']:
-			return None
 		return cls.model_validate(values)
 
 
@@ -211,30 +214,31 @@ SAFETY BOUNDARY
 def optimized_marketplace_task(prompt: str) -> str:
 	"""Turn a Marketplace request into a screenshot-verified listing search."""
 	config = MarketplaceVisionConfig.from_environment()
-	target = config.target if config else 'the product described by the user'
-	visual_criterion = config.visual_criterion if config else 'the visual feature described by the user'
-	max_results = config.max_results if config else 10
+	target = config.target
+	visual_criterion = config.visual_criterion
+	destination = config.destination
+	max_results = config.max_results
 	return f"""USER REQUEST
 {prompt.strip()}
 
 VISUAL SEARCH TARGET
-Search specifically for {target} offered in the United States. A listing qualifies only when its photos visibly satisfy this criterion: {visual_criterion}.
+Search specifically for {target} offered in the United States and available for shipping to {destination}. A listing qualifies only when its photos visibly satisfy this criterion: {visual_criterion}.
 
 MARKETPLACE SEARCH WORKFLOW
 1. Use only Facebook Marketplace. If login, CAPTCHA, passkey, OTP, or another authentication checkpoint appears, stop and ask the user to complete it manually.
-2. Search Marketplace listings available in the United States. Use the widest US radius and shipping/delivery coverage the interface permits. If Marketplace remains location-limited, sample multiple major US regions and state exactly which regions were covered.
+2. Search Marketplace listings available in the United States. Use the widest US radius and shipping coverage the interface permits. Open each plausible listing and confirm from visible listing details that shipping or delivery to {destination} is available. Exclude pickup-only listings and listings whose shipping eligibility remains unclear. Never enter a street address or change the account's saved location.
 3. Search useful singular, plural, and common-title variants for the requested product. Scroll or paginate until no new qualifying results appear, the site imposes a limit, or the agent step budget is near exhaustion.
 4. Use screenshot vision for every plausible candidate. Open the listing and enlarge or advance through its available product photos when needed. Do not classify from the title, description, accessibility text, or thumbnail alone.
 5. Include a listing only when at least one clear product photo shows the requested visual feature. For an open beak, require a visible gap between the upper and lower beak. Reject closed beaks, unclear thumbnails, occluded or out-of-frame beaks, illustrations when a statue is requested, and ambiguous side angles.
-6. Record the listing title, price, location, exact visual evidence, and canonical Marketplace URL. Never infer a visual feature that is not clearly visible.
-7. Deduplicate primarily by listing URL, then by matching photos, title, price, and location. Return up to {max_results} visually confirmed matches, plus concise coverage and exclusion notes. Never claim nationwide exhaustiveness when Facebook limits visible results.
+6. Record the listing title, price, location, exact visual evidence, visible shipping evidence for {destination}, and canonical Marketplace URL. Never infer a visual feature or shipping eligibility that is not clearly shown.
+7. Deduplicate primarily by listing URL, then by matching photos, title, price, and location. Rank qualifying results by open-beak visual confidence first, confirmed shipping confidence second, then listing completeness, seller rating when visible, condition, and value. Return up to {max_results} strongest matches, plus concise coverage and exclusion notes. Never claim nationwide exhaustiveness when Facebook limits visible results.
 
 STRICT READ-ONLY BOUNDARY
 Do not message sellers, click Contact or Make Offer, save listings, reveal contact information, change the account, add anything to a cart, begin checkout, or make a purchase. A Facebook location-verification modal is an immediate blocker for outreach but does not prevent completing this read-only visual search. Close or leave that modal without retrying seller contact, then continue research.
 
 FINAL RESPONSE FORMAT
-Return one tab-separated line per visually verified listing using the MATCH marker followed by exactly these five fields:
-MATCH<TAB>title<TAB>price<TAB>location<TAB>specific visual evidence that the beak is open<TAB>listing URL
+Return one tab-separated line per visually verified and shipping-confirmed listing using the MATCH marker followed by exactly these six fields:
+MATCH<TAB>title<TAB>price<TAB>location<TAB>specific visual evidence that the beak is open<TAB>shipping evidence for {destination}<TAB>listing URL
 Do not put tab characters inside a field. After the matches, return COVERAGE<TAB>followed by regions, filters, and title variants searched; LIMITATIONS<TAB>followed by any Facebook visibility limits; and EXCLUDED<TAB>followed by a concise summary of closed-beak, unclear, or unrelated candidates rejected. If no qualifying listings are visible, return no MATCH lines and explain why in LIMITATIONS. The frontend will supply the results heading."""
 
 

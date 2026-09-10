@@ -136,21 +136,25 @@ ignored `.scout-marketplace-ui-profile`. The launcher attaches Browser Use over
 localhost CDP port `9223`; it does not use Browserbase or Browser Use Cloud.
 
 Marketplace mode is isolated from `.checkout.env`, so the Amazon purchase demo
-cannot affect it. Marketplace work is strictly read-only. An ignored local
-`.marketplace.env` can configure a visual search target:
+cannot affect it. Marketplace work is strictly read-only. The committed backend
+brief defaults to geese statues with visibly open beaks that ship to Sunnyvale,
+California 94085. An ignored local `.marketplace.env` can override that target:
 
 ```dotenv
 QWEN38_MARKETPLACE_TARGET='YOUR ITEM'
 QWEN38_MARKETPLACE_VISUAL_CRITERION='THE FEATURE THAT MUST BE CLEARLY VISIBLE'
+QWEN38_MARKETPLACE_DESTINATION='CITY, STATE ZIP'
 QWEN38_MARKETPLACE_MAX_RESULTS=10
 ```
 
 The launcher forces screenshot vision on. The agent opens candidate listings,
 inspects product photos at useful size, and includes only items whose pixels
-clearly satisfy the configured feature. The geese-statue demo requires a visible
-gap between the upper and lower beak; closed, occluded, out-of-frame, thumbnail-
-only, and ambiguous beaks are rejected. The frontend returns cards with title,
-price, location, the specific visual evidence, and a clickable Marketplace URL.
+clearly satisfy the configured feature and whose listing visibly confirms shipping
+to the configured destination. The geese-statue demo requires a visible gap
+between the upper and lower beak; closed, occluded, out-of-frame, thumbnail-only,
+and ambiguous beaks are rejected. Pickup-only and shipping-unclear listings are
+also excluded. The frontend returns cards with title, price, location, specific
+visual and shipping evidence, and a clickable Marketplace URL.
 It never contacts sellers, makes offers, saves listings, checks out, or purchases.
 Facebook can limit result visibility, geography, and pagination, so the result
 reports observed coverage and must not claim a provably exhaustive US inventory
