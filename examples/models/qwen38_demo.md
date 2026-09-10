@@ -62,6 +62,11 @@ into a concrete brief and progress narrative. The right pane mirrors each agent
 step and shows live runtime status. The API key stays server-side, and the agent
 keeps the same checkout safety boundary as the terminal demo.
 
+The harness uses the system browser by default. Set `BROWSER_USE_CDP_URL` to
+attach to an already-running debugging-enabled browser, or set
+`QWEN38_UI_BROWSER=playwright` only when you explicitly want the Playwright
+Chrome-for-Testing binary.
+
 ## Inference recipe
 
 The original fast deployment used Qwen/Qwen3.8-27B-FP8 on two B200 GPUs in US West, tensor parallelism 2, DFlash2 speculative decoding with 8 draft tokens, BF16 KV cache, and one concurrent inference request. Its SGLang source was pinned to `746418a1ec78ff1231e452706ce560bcad787c39` with `trtllm_mha` attention and `flashinfer_trtllm` FP8 GEMM. The context budget was 262,144 tokens. This branch connects to an existing endpoint; it does not provision or deploy GPUs.

@@ -28,6 +28,18 @@ HERE = Path(__file__).resolve().parent
 UI_PATH = HERE / 'qwen38_grokbot.html'
 AGENT_PATH = HERE / 'qwen38_modal.py'
 ANSI_RE = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
+NUMBER_WORDS = {
+	'one': 1,
+	'two': 2,
+	'three': 3,
+	'four': 4,
+	'five': 5,
+	'six': 6,
+	'seven': 7,
+	'eight': 8,
+	'nine': 9,
+	'ten': 10,
+}
 
 
 class RunRequest(BaseModel):
@@ -65,43 +77,62 @@ ACTIVE_RUN_ID: str | None = None
 
 
 def shopping_brief(prompt: str) -> dict[str, object]:
-	"""Extract the demo's core constraints for an answer-first story card."""
+	"""Extract only constraints actually present in the submitted request."""
 	lower = prompt.lower()
 	recipients_match = re.search(r'(\d+)\s+(?:girls|boys|kids|children|guests)', lower)
-	favor_match = re.search(r'(\d+)\s+(?:party\s+)?favors?\s+each', lower)
+	favor_match = re.search(r'(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:party\s+)?favors?\s+each', lower)
 	price_match = re.search(r'(?:less than|under|max(?:imum)?(?: of)?)\s*\$\s*(\d+(?:\.\d+)?)', lower)
-	recipients = int(recipients_match.group(1)) if recipients_match else 12
-	favors_each = int(favor_match.group(1)) if favor_match else 3
-	unit_cap = float(price_match.group(1)) if price_match else 5.0
-	total_units = recipients * favors_each
-	return {
-		'recipients': recipients,
-		'favors_each': favors_each,
-		'unit_cap': unit_cap,
-		'total_units': total_units,
-		'max_merchandise': total_units * unit_cap,
-	}
+	recipients = int(recipients_match.group(1)) if recipients_match else None
+	favors_each = (
+		int(favor_match.group(1))
+		if favor_match and favor_match.group(1).isdigit()
+		else NUMBER_WORDS.get(favor_match.group(1))
+		if favor_match
+		else None
+	)
+	unit_cap = float(price_match.group(1)) if price_match else None
+	metrics: list[dict[str, str]] = []
+	if recipients is not None:
+		metrics.append({'value': str(recipients), 'label': 'recipients'})
+	if favors_each is not None:
+		metrics.append({'value': str(favors_each), 'label': 'items per recipient'})
+	if unit_cap is not None:
+		metrics.append({'value': f'<${unit_cap:.2f}', 'label': 'per-item cap'})
+	if recipients is not None and favors_each is not None:
+		total_units = recipients * favors_each
+		metrics.append({'value': str(total_units), 'label': 'items required'})
+		if unit_cap is not None:
+			metrics.append({'value': f'≤${total_units * unit_cap:.2f}', 'label': 'merchandise ceiling'})
+	return {'metrics': metrics}
 
 
 def optimized_task(prompt: str) -> str:
 	"""Turn a casual party-shopping request into a verifiable agent brief."""
 	brief = shopping_brief(prompt)
+	metrics = brief['metrics']
+	constraint_lines = (
+		'\n'.join(f'- {metric["label"]}: {metric["value"]}' for metric in metrics)
+		or '- No numeric constraints detected; infer nothing and verify ambiguous requirements with the user.'
+	)
+	age_safety = (
+		'- The recipients are under five: prefer non-toxic, age-appropriate products without magnets, sharp parts, projectiles, or small detachable choking hazards.\n'
+		if re.search(r'under\s+(?:five|5)', prompt, re.I)
+		else ''
+	)
 	return f"""USER STORY
 {prompt.strip()}
 
-INTERPRETATION FOR THIS DEMO
-- Shop for {brief['recipients']} children.
-- Choose {brief['favors_each']} distinct, age-appropriate party-favor types.
-- Obtain at least {brief['recipients']} individual favors of each type ({brief['total_units']} favors total).
-- Every individual favor must cost less than ${brief['unit_cap']:.2f}. A multipack may cost more only when its per-item price stays below that cap.
-- Prefer non-food, non-toxic, non-choking-hazard options appropriate for children under five. Avoid sharp, magnetic, projectile, makeup, and small detachable items.
+EXPLICITLY PARSED CONSTRAINTS
+{constraint_lines}
+{age_safety}
+Interpret the request literally. Do not invent quantities, budgets, recipients, product categories, or preferences that the user did not state. For multipacks, distinguish listing price from per-item price and show the arithmetic.
 
 SHOPPING WORKFLOW
 1. Open Amazon and search for clearly matching, available products.
 2. Compare pack count, age guidance, price, delivery availability, and per-item cost before choosing.
-3. Add enough one-time-purchase quantity for each favor type. Do not use subscriptions, pickup, or Buy Now.
+3. Add the correct one-time-purchase quantity for every requested item or category. Do not use subscriptions, pickup, or Buy Now.
 4. After every add-to-cart action, verify the resulting page confirms the addition.
-5. Open the cart and verify all favor types, quantities, pack math, and per-item price. Preserve unrelated cart items.
+5. Open the cart and verify all requested items, quantities, pack math, and applicable per-item prices. Preserve unrelated cart items.
 6. Proceed toward checkout only after verification, then stop immediately at sign-in, CAPTCHA, address, payment, or final order review.
 
 SAFETY BOUNDARY
@@ -168,10 +199,11 @@ async def launch_agent(state: RunState) -> None:
 	environment = os.environ.copy()
 	environment.pop('BROWSER_USE_HEADLESS', None)
 	environment['QWEN38_UI_EVENT_PATH'] = str(state.event_path)
+	browser_arguments = ['--chromium'] if environment.get('QWEN38_UI_BROWSER') == 'playwright' else []
 	state.process = await asyncio.create_subprocess_exec(
 		sys.executable,
 		str(AGENT_PATH),
-		'--chromium',
+		*browser_arguments,
 		'--keep-open',
 		'--task',
 		optimized_task(state.prompt),
