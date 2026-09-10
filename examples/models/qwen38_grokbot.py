@@ -70,7 +70,7 @@ class MarketplaceVisionConfig(BaseModel):
 	target: str = Field(min_length=1, max_length=200)
 	visual_criterion: str = Field(min_length=1, max_length=500)
 	destination: str = Field(min_length=1, max_length=200)
-	max_results: int = Field(default=10, ge=1, le=50)
+	max_results: int = Field(default=2, ge=1, le=50)
 
 	@classmethod
 	def from_environment(cls) -> MarketplaceVisionConfig:
@@ -82,7 +82,7 @@ class MarketplaceVisionConfig(BaseModel):
 				'the goose statue has a clearly visible open beak with a gap between the upper and lower beak',
 			).strip(),
 			'destination': os.getenv('QWEN38_MARKETPLACE_DESTINATION', 'Sunnyvale, CA 94085').strip(),
-			'max_results': os.getenv('QWEN38_MARKETPLACE_MAX_RESULTS', '10').strip(),
+			'max_results': os.getenv('QWEN38_MARKETPLACE_MAX_RESULTS', '2').strip(),
 		}
 		return cls.model_validate(values)
 
@@ -227,11 +227,11 @@ Search specifically for {target} offered in the United States and available for 
 MARKETPLACE SEARCH WORKFLOW
 1. Use only Facebook Marketplace. If login, CAPTCHA, passkey, OTP, or another authentication checkpoint appears, stop and ask the user to complete it manually.
 2. Search Marketplace listings available in the United States. Use the widest US radius and shipping coverage the interface permits. Open each plausible listing and confirm from visible listing details that shipping or delivery to {destination} is available. Exclude pickup-only listings and listings whose shipping eligibility remains unclear. Never enter a street address or change the account's saved location.
-3. Search useful singular, plural, and common-title variants for the requested product. Scroll or paginate until no new qualifying results appear, the site imposes a limit, or the agent step budget is near exhaustion.
+3. Search useful singular, plural, and common-title variants for the requested product. Keep a durable working record of every fully verified match as soon as it qualifies. Stop searching immediately when {max_results} unique listings have both clear visual proof and confirmed shipping to {destination}; do not keep scrolling, inspect additional candidates, or attempt an exhaustive search after reaching that target.
 4. Use screenshot vision for every plausible candidate. Open the listing and enlarge or advance through its available product photos when needed. Do not classify from the title, description, accessibility text, or thumbnail alone.
 5. Include a listing only when at least one clear product photo shows the requested visual feature. For an open beak, require a visible gap between the upper and lower beak. Reject closed beaks, unclear thumbnails, occluded or out-of-frame beaks, illustrations when a statue is requested, and ambiguous side angles.
 6. Record the listing title, price, location, exact visual evidence, visible shipping evidence for {destination}, and canonical Marketplace URL. Never infer a visual feature or shipping eligibility that is not clearly shown.
-7. Deduplicate primarily by listing URL, then by matching photos, title, price, and location. Rank qualifying results by open-beak visual confidence first, confirmed shipping confidence second, then listing completeness, seller rating when visible, condition, and value. Return up to {max_results} strongest matches, plus concise coverage and exclusion notes. Never claim nationwide exhaustiveness when Facebook limits visible results.
+7. Deduplicate primarily by listing URL, then by matching photos, title, price, and location. Rank the verified set by open-beak visual confidence first, confirmed shipping confidence second, then listing completeness, seller rating when visible, condition, and value. Return exactly {max_results} matches when that many qualify. If Facebook blocks progress or an individual listing control fails before the target is reached, abandon that candidate and return every match already verified rather than discarding partial success. Never claim nationwide exhaustiveness when Facebook limits visible results.
 
 STRICT READ-ONLY BOUNDARY
 Do not message sellers, click Contact or Make Offer, save listings, reveal contact information, change the account, add anything to a cart, begin checkout, or make a purchase. A Facebook location-verification modal is an immediate blocker for outreach but does not prevent completing this read-only visual search. Close or leave that modal without retrying seller contact, then continue research.
