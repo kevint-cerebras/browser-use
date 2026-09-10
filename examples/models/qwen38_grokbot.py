@@ -70,7 +70,7 @@ class MarketplaceVisionConfig(BaseModel):
 	target: str = Field(min_length=1, max_length=200)
 	visual_criterion: str = Field(min_length=1, max_length=500)
 	destination: str = Field(min_length=1, max_length=200)
-	max_results: int = Field(default=2, ge=1, le=50)
+	max_results: int = Field(default=4, ge=1, le=50)
 
 	@classmethod
 	def from_environment(cls) -> MarketplaceVisionConfig:
@@ -82,7 +82,7 @@ class MarketplaceVisionConfig(BaseModel):
 				'the goose statue has a clearly visible open beak with a gap between the upper and lower beak',
 			).strip(),
 			'destination': os.getenv('QWEN38_MARKETPLACE_DESTINATION', 'Sunnyvale, CA 94085').strip(),
-			'max_results': os.getenv('QWEN38_MARKETPLACE_MAX_RESULTS', '2').strip(),
+			'max_results': os.getenv('QWEN38_MARKETPLACE_MAX_RESULTS', '4').strip(),
 		}
 		return cls.model_validate(values)
 

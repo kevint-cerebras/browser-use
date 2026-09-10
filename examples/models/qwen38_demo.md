@@ -144,7 +144,7 @@ California 94085. An ignored local `.marketplace.env` can override that target:
 QWEN38_MARKETPLACE_TARGET='YOUR ITEM'
 QWEN38_MARKETPLACE_VISUAL_CRITERION='THE FEATURE THAT MUST BE CLEARLY VISIBLE'
 QWEN38_MARKETPLACE_DESTINATION='CITY, STATE ZIP'
-QWEN38_MARKETPLACE_MAX_RESULTS=2
+QWEN38_MARKETPLACE_MAX_RESULTS=4
 ```
 
 The launcher forces screenshot vision on. The agent opens candidate listings,
@@ -156,7 +156,7 @@ and ambiguous beaks are rejected. Pickup-only and shipping-unclear listings are
 also excluded. The frontend returns cards with title, price, location, specific
 visual and shipping evidence, and a clickable Marketplace URL.
 It never contacts sellers, makes offers, saves listings, checks out, or purchases.
-The demo stops searching immediately after two unique listings are fully verified;
+The demo stops searching immediately after four unique listings are fully verified;
 if Facebook blocks further progress sooner, it returns the verified subset.
 Facebook can limit result visibility, geography, and pagination, so the result
 reports observed coverage and must not claim a provably exhaustive US inventory
