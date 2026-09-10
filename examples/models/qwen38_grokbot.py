@@ -1,4 +1,4 @@
-"""Run the Qwen Browser Use demo behind a lightweight split-pane web harness."""
+"""Run the Qwen Browser Use demo behind a lightweight chat harness."""
 
 from __future__ import annotations
 
@@ -145,6 +145,9 @@ def snapshot_payload(state: RunState) -> dict[str, object]:
 	if state.event_path and state.event_path.is_file():
 		try:
 			snapshot = json.loads(state.event_path.read_text(encoding='utf-8'))
+			# The real browser is visible in its own window; only send progress text
+			# to the chat UI rather than transferring screenshot bytes on every poll.
+			snapshot.pop('screenshot', None)
 		except (OSError, json.JSONDecodeError):
 			snapshot = None
 	return {
@@ -152,7 +155,6 @@ def snapshot_payload(state: RunState) -> dict[str, object]:
 		'status': state.status,
 		'step': state.step,
 		'elapsed': state.total_seconds or time.time() - state.started_at,
-		'log': state.log[-80_000:],
 		'final_result': state.final_result,
 		'brief': shopping_brief(state.prompt),
 		'snapshot': snapshot,
@@ -275,7 +277,7 @@ APP = Starlette(
 
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description='Run the split-pane Qwen shopping harness.')
+	parser = argparse.ArgumentParser(description='Run the Qwen shopping chat harness.')
 	parser.add_argument('--host', default='127.0.0.1')
 	parser.add_argument('--port', type=int, default=8765)
 	arguments = parser.parse_args()

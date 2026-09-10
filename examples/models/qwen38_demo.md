@@ -49,18 +49,19 @@ uv run --no-dev --with playwright examples/models/qwen38_modal.py --chromium \
   --task 'Open https://example.com and report its heading. Do not navigate elsewhere.'
 ```
 
-## Split-pane shopping harness
+## Shopping chat harness
 
-Launch the Grok-style chat and live browser preview:
+Launch the Grok-style chat:
 
 ```bash
 uv run --no-dev examples/models/qwen38_grokbot.py
 ```
 
-Open `http://127.0.0.1:8765`. The left pane converts the party-shopping story
-into a concrete brief and progress narrative. The right pane mirrors each agent
-step and shows live runtime status. The API key stays server-side, and the agent
-keeps the same checkout safety boundary as the terminal demo.
+Open `http://127.0.0.1:8765`. The chat converts the party-shopping story
+into a concrete brief and progress narrative. The real browser stays visible in
+its own window; the chat header reports live step, status, and runtime. The API
+key stays server-side, and the agent keeps the same checkout safety boundary as
+the terminal demo.
 
 The harness uses the system browser by default. Set `BROWSER_USE_CDP_URL` to
 attach to an already-running debugging-enabled browser, or set
