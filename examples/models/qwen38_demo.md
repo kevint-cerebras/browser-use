@@ -54,7 +54,7 @@ uv run --no-dev --with playwright examples/models/qwen38_modal.py --chromium \
 Launch the Grok-style chat and live browser preview:
 
 ```bash
-uv run --no-dev --with playwright examples/models/qwen38_grokbot.py
+uv run --no-dev examples/models/qwen38_grokbot.py
 ```
 
 Open `http://127.0.0.1:8765`. The left pane converts the party-shopping story

@@ -279,4 +279,6 @@ if __name__ == '__main__':
 	parser.add_argument('--host', default='127.0.0.1')
 	parser.add_argument('--port', type=int, default=8765)
 	arguments = parser.parse_args()
+	print(f'\nScout is ready at http://{arguments.host}:{arguments.port}', flush=True)
+	print('Keep this terminal open while using the UI. Press Ctrl+C to stop.\n', flush=True)
 	uvicorn.run(APP, host=arguments.host, port=arguments.port, log_level='warning')
