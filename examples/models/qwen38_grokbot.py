@@ -223,6 +223,16 @@ async def home(_request: Request) -> FileResponse:
 
 async def create_run(request: Request) -> JSONResponse:
 	global ACTIVE_RUN_ID
+	if os.getenv('CODEX_SANDBOX'):
+		return JSONResponse(
+			{
+				'error': (
+					'This server is running inside the managed Codex sandbox, which macOS prevents from launching Chrome. '
+					'Start the same command in a normal Terminal, then reload this page.'
+				)
+			},
+			status_code=409,
+		)
 	active = RUNS.get(ACTIVE_RUN_ID or '')
 	if active and active.status in {'starting', 'running', 'waiting'}:
 		return JSONResponse({'error': 'Finish or stop the active run first.'}, status_code=409)
