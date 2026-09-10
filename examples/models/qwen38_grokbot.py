@@ -70,7 +70,7 @@ class MarketplaceVisionConfig(BaseModel):
 	target: str = Field(min_length=1, max_length=200)
 	visual_criterion: str = Field(min_length=1, max_length=500)
 	destination: str = Field(min_length=1, max_length=200)
-	max_results: int = Field(default=4, ge=1, le=50)
+	max_results: int = Field(default=2, ge=1, le=50)
 
 	@classmethod
 	def from_environment(cls) -> MarketplaceVisionConfig:
@@ -82,7 +82,7 @@ class MarketplaceVisionConfig(BaseModel):
 				'the goose statue has a clearly visible open beak with a gap between the upper and lower beak',
 			).strip(),
 			'destination': os.getenv('QWEN38_MARKETPLACE_DESTINATION', 'Sunnyvale, CA 94085').strip(),
-			'max_results': os.getenv('QWEN38_MARKETPLACE_MAX_RESULTS', '4').strip(),
+			'max_results': os.getenv('QWEN38_MARKETPLACE_MAX_RESULTS', '2').strip(),
 		}
 		return cls.model_validate(values)
 
@@ -228,17 +228,18 @@ MARKETPLACE SEARCH WORKFLOW
 1. Use only Facebook Marketplace. If login, CAPTCHA, passkey, OTP, or another authentication checkpoint appears, stop and ask the user to complete it manually.
 2. Search Marketplace listings available in the United States. Use the widest US radius and shipping coverage the interface permits. Open each plausible listing and confirm from visible listing details that shipping or delivery to {destination} is available. Exclude pickup-only listings and listings whose shipping eligibility remains unclear. Never enter a street address or change the account's saved location.
 3. Search useful singular, plural, and common-title variants for the requested product. Keep a durable working record of every fully verified match as soon as it qualifies. Stop searching immediately when {max_results} unique listings have both clear visual proof and confirmed shipping to {destination}; do not keep scrolling, inspect additional candidates, or attempt an exhaustive search after reaching that target.
-4. Use screenshot vision for every plausible candidate. Open the listing and enlarge or advance through its available product photos when needed. Do not classify from the title, description, accessibility text, or thumbnail alone.
-5. Include a listing only when at least one clear product photo shows the requested visual feature. For an open beak, require a visible gap between the upper and lower beak. Reject closed beaks, unclear thumbnails, occluded or out-of-frame beaks, illustrations when a statue is requested, and ambiguous side angles.
-6. Record the listing title, price, location, exact visual evidence, visible shipping evidence for {destination}, and canonical Marketplace URL. Never infer a visual feature or shipping eligibility that is not clearly shown.
-7. Deduplicate primarily by listing URL, then by matching photos, title, price, and location. Rank the verified set by open-beak visual confidence first, confirmed shipping confidence second, then listing completeness, seller rating when visible, condition, and value. Return exactly {max_results} matches when that many qualify. If Facebook blocks progress or an individual listing control fails before the target is reached, abandon that candidate and return every match already verified rather than discarding partial success. Never claim nationwide exhaustiveness when Facebook limits visible results.
+4. Use screenshot vision for every plausible candidate. Open the listing and click through every available product photo before accepting or rejecting it; never reject a listing from its main photo alone when more photos are available. After each gallery click, use the next screenshot, active thumbnail, or photo counter to verify that a different photo actually appeared before inspecting it. Prefer explicit thumbnails when present; otherwise use the visible Next-photo control.
+5. If the Next-photo control does not change the image, do not repeat the same click. Try one alternate visible thumbnail or one ArrowRight keypress and verify the resulting image. If neither route advances the gallery, record the control as blocked, preserve all earlier verified matches, abandon this candidate, and continue from the results. Stop after returning to the first photo or after every distinct available photo has been inspected; do not cycle indefinitely.
+6. Include a listing only when at least one clear product photo shows the requested visual feature. For an open beak, require a visible gap between the upper and lower beak. Reject closed beaks, unclear thumbnails, occluded or out-of-frame beaks, illustrations when a statue is requested, and ambiguous side angles only after completing the available-photo review.
+7. Record the listing title, price, location, exact visual evidence including which photo showed it, visible shipping evidence for {destination}, and canonical Marketplace URL. Never infer a visual feature or shipping eligibility that is not clearly shown.
+8. Deduplicate primarily by listing URL, then by matching photos, title, price, and location. Rank the verified set by open-beak visual confidence first, confirmed shipping confidence second, then listing completeness, seller rating when visible, condition, and value. Return exactly {max_results} matches when that many qualify. If Facebook blocks progress or an individual listing control fails before the target is reached, abandon that candidate and return every match already verified rather than discarding partial success. Never claim nationwide exhaustiveness when Facebook limits visible results.
 
 STRICT READ-ONLY BOUNDARY
 Do not message sellers, click Contact or Make Offer, save listings, reveal contact information, change the account, add anything to a cart, begin checkout, or make a purchase. A Facebook location-verification modal is an immediate blocker for outreach but does not prevent completing this read-only visual search. Close or leave that modal without retrying seller contact, then continue research.
 
 FINAL RESPONSE FORMAT
 Return one tab-separated line per visually verified and shipping-confirmed listing using the MATCH marker followed by exactly these six fields:
-MATCH<TAB>title<TAB>price<TAB>location<TAB>specific visual evidence that the beak is open<TAB>shipping evidence for {destination}<TAB>listing URL
+MATCH<TAB>title<TAB>price<TAB>location<TAB>specific visual evidence that the beak is open, including the photo position<TAB>shipping evidence for {destination}<TAB>listing URL
 Do not put tab characters inside a field. After the matches, return COVERAGE<TAB>followed by regions, filters, and title variants searched; LIMITATIONS<TAB>followed by any Facebook visibility limits; and EXCLUDED<TAB>followed by a concise summary of closed-beak, unclear, or unrelated candidates rejected. If no qualifying listings are visible, return no MATCH lines and explain why in LIMITATIONS. The frontend will supply the results heading."""
 
 

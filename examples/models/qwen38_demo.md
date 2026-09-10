@@ -144,19 +144,23 @@ California 94085. An ignored local `.marketplace.env` can override that target:
 QWEN38_MARKETPLACE_TARGET='YOUR ITEM'
 QWEN38_MARKETPLACE_VISUAL_CRITERION='THE FEATURE THAT MUST BE CLEARLY VISIBLE'
 QWEN38_MARKETPLACE_DESTINATION='CITY, STATE ZIP'
-QWEN38_MARKETPLACE_MAX_RESULTS=4
+QWEN38_MARKETPLACE_MAX_RESULTS=2
 ```
 
-The launcher forces screenshot vision on. The agent opens candidate listings,
-inspects product photos at useful size, and includes only items whose pixels
+The launcher forces screenshot vision on. The agent opens candidate listings and
+clicks through every available product photo, verifying a new image after each
+click with screenshot state, the active thumbnail, or the photo counter. It tries
+a thumbnail or one ArrowRight fallback when Facebook's Next control is inert, then
+abandons that candidate instead of looping. It includes only items whose pixels
 clearly satisfy the configured feature and whose listing visibly confirms shipping
 to the configured destination. The geese-statue demo requires a visible gap
 between the upper and lower beak; closed, occluded, out-of-frame, thumbnail-only,
-and ambiguous beaks are rejected. Pickup-only and shipping-unclear listings are
-also excluded. The frontend returns cards with title, price, location, specific
-visual and shipping evidence, and a clickable Marketplace URL.
+and ambiguous beaks are rejected only after the available photos are reviewed.
+Pickup-only and shipping-unclear listings are also excluded. The frontend returns
+cards with title, price, location, specific visual and shipping evidence, and a
+clickable Marketplace URL.
 It never contacts sellers, makes offers, saves listings, checks out, or purchases.
-The demo stops searching immediately after four unique listings are fully verified;
+The demo stops searching immediately after two unique listings are fully verified;
 if Facebook blocks further progress sooner, it returns the verified subset.
 Facebook can limit result visibility, geography, and pagination, so the result
 reports observed coverage and must not claim a provably exhaustive US inventory
