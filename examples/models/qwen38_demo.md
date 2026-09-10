@@ -97,6 +97,25 @@ grants browser control to local processes, so keep the port bound to loopback
 and quit this dedicated Chrome window after the demo. The agent still receives
 page state and screenshots and must retain the documented checkout safety stop.
 
+For a local demo that is explicitly authorized to advance through address and
+saved-payment selection, put the ephemeral overrides below in `.checkout.env`:
+
+```dotenv
+QWEN38_CHECKOUT_ITEM_COUNT=5
+QWEN38_CHECKOUT_ADDRESS='YOUR SHIPPING ADDRESS'
+QWEN38_CHECKOUT_USE_SAVED_CARD=true
+QWEN38_CHECKOUT_PLACE_ORDER=false
+```
+
+This ignored file is loaded only by the local chat harness. With these values,
+the agent verifies the requested item count, proceeds directly to checkout,
+enters or selects the supplied address, and selects an existing card on file.
+It still stops at authentication/CAPTCHA and never adds a new payment method.
+The default `false` value stops at final review. Setting `PLACE_ORDER=true`
+explicitly authorizes one submission only after final cart, address, payment,
+delivery, and total verification. Delete `.checkout.env` after the demo to
+restore the default earlier checkout boundary.
+
 ## Inference recipe
 
 The original fast deployment used Qwen/Qwen3.8-27B-FP8 on two B200 GPUs in US West, tensor parallelism 2, DFlash2 speculative decoding with 8 draft tokens, BF16 KV cache, and one concurrent inference request. Its SGLang source was pinned to `746418a1ec78ff1231e452706ce560bcad787c39` with `trtllm_mha` attention and `flashinfer_trtllm` FP8 GEMM. The context budget was 262,144 tokens. This branch connects to an existing endpoint; it does not provision or deploy GPUs.

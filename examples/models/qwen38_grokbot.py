@@ -18,6 +18,7 @@ from typing import Literal
 from uuid import uuid4
 
 import uvicorn
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from starlette.applications import Starlette
 from starlette.requests import Request
@@ -27,6 +28,7 @@ from starlette.routing import Route
 HERE = Path(__file__).resolve().parent
 UI_PATH = HERE / 'qwen38_grokbot.html'
 AGENT_PATH = HERE / 'qwen38_modal.py'
+REPO_ROOT = HERE.parents[1]
 ANSI_RE = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 NUMBER_WORDS = {
 	'one': 1,
@@ -40,6 +42,9 @@ NUMBER_WORDS = {
 	'nine': 9,
 	'ten': 10,
 }
+
+load_dotenv(REPO_ROOT / '.env')
+load_dotenv(REPO_ROOT / '.checkout.env')
 
 
 class RunRequest(BaseModel):
@@ -119,6 +124,43 @@ def optimized_task(prompt: str) -> str:
 		if re.search(r'under\s+(?:five|5)', prompt, re.I)
 		else ''
 	)
+	checkout_address = ' '.join(os.getenv('QWEN38_CHECKOUT_ADDRESS', '').splitlines()).strip()
+	checkout_item_count = os.getenv('QWEN38_CHECKOUT_ITEM_COUNT', '').strip()
+	use_saved_card = os.getenv('QWEN38_CHECKOUT_USE_SAVED_CARD', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+	place_order = os.getenv('QWEN38_CHECKOUT_PLACE_ORDER', '').strip().lower() in {'1', 'true', 'yes', 'on'}
+	checkout_override = bool(checkout_address or checkout_item_count or use_saved_card or place_order)
+	if checkout_override:
+		final_checkout_step = (
+			f"10. On final review, re-verify exactly {checkout_item_count or 'the requested number of'} requested "
+			'line items, quantities, shipping address, saved payment selection, delivery details, and displayed order '
+			'total. If they all match, click the final Place your order button exactly once. Verify and report the '
+			'resulting Amazon order confirmation; do not buy anything else.'
+			if place_order
+			else '10. Stop on the final order-review page before any button that submits or places the order.'
+		)
+		checkout_steps = f"""6. Once exactly {checkout_item_count or 'the requested number of'} requested cart line items are verified, proceed directly to checkout.
+7. Stop for the user at any login, CAPTCHA, passkey, OTP, or other authentication challenge.
+8. Enter or select this user-authorized shipping address exactly: {checkout_address or '[no address supplied]'}.
+9. {'Select the existing card on file without revealing, copying, or changing its details.' if use_saved_card else 'Stop before selecting or entering payment.'}
+{final_checkout_step}"""
+		safety_boundary = (
+			'The shipping address, saved-card selection, and one final Amazon order submission above are explicitly '
+			'authorized for this local demo. Never enter credentials, solve a CAPTCHA, add a new payment method, reveal '
+			'card details, submit with a cart mismatch, or place more than one order.'
+			if place_order
+			else 'The shipping address and saved-card selection above are explicitly authorized for this local demo. '
+			'Never enter credentials, solve a CAPTCHA, add a new payment method, reveal card details, click Place your '
+			'order, or complete a purchase.'
+		)
+	else:
+		checkout_steps = (
+			'6. Proceed toward checkout only after verification, then stop immediately at sign-in, CAPTCHA, address, '
+			'payment, or final order review.'
+		)
+		safety_boundary = (
+			'Never enter credentials, delivery addresses, payment details, or solve a CAPTCHA. Never click Place your '
+			'order or complete a purchase.'
+		)
 	return f"""USER STORY
 {prompt.strip()}
 
@@ -133,10 +175,10 @@ SHOPPING WORKFLOW
 3. Add the correct one-time-purchase quantity for every requested item or category. Do not use subscriptions, pickup, or Buy Now.
 4. After every add-to-cart action, verify the resulting page confirms the addition.
 5. Open the cart and verify all requested items, quantities, pack math, and applicable per-item prices. Preserve unrelated cart items.
-6. Proceed toward checkout only after verification, then stop immediately at sign-in, CAPTCHA, address, payment, or final order review.
+{checkout_steps}
 
 SAFETY BOUNDARY
-Never enter credentials, delivery addresses, payment details, or solve a CAPTCHA. Never click Place your order or complete a purchase. Report selected products, pack math, prices, cart verification, and checkout state."""
+{safety_boundary} Report selected products, pack math, prices, cart verification, and checkout state."""
 
 
 def snapshot_payload(state: RunState) -> dict[str, object]:
