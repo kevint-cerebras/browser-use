@@ -49,6 +49,19 @@ uv run --no-dev --with playwright examples/models/qwen38_modal.py --chromium \
   --task 'Open https://example.com and report its heading. Do not navigate elsewhere.'
 ```
 
+## Split-pane shopping harness
+
+Launch the Grok-style chat and live browser preview:
+
+```bash
+uv run --no-dev --with playwright examples/models/qwen38_grokbot.py
+```
+
+Open `http://127.0.0.1:8765`. The left pane converts the party-shopping story
+into a concrete brief and progress narrative. The right pane mirrors each agent
+step and shows live runtime status. The API key stays server-side, and the agent
+keeps the same checkout safety boundary as the terminal demo.
+
 ## Inference recipe
 
 The original fast deployment used Qwen/Qwen3.8-27B-FP8 on two B200 GPUs in US West, tensor parallelism 2, DFlash2 speculative decoding with 8 draft tokens, BF16 KV cache, and one concurrent inference request. Its SGLang source was pinned to `746418a1ec78ff1231e452706ce560bcad787c39` with `trtllm_mha` attention and `flashinfer_trtllm` FP8 GEMM. The context budget was 262,144 tokens. This branch connects to an existing endpoint; it does not provision or deploy GPUs.

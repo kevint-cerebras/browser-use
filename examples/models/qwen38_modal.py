@@ -317,11 +317,28 @@ def uses_sglang_sampling(base_url: str) -> bool:
 	return hostname != 'api.cerebras.ai'
 
 
-def print_structured_thinking(_browser_state: Any, model_output: Any, step_number: int) -> None:
-	"""Print the bounded, visible reasoning field returned by the Flash agent."""
+def print_structured_thinking(browser_state: Any, model_output: Any, step_number: int) -> None:
+	"""Print structured reasoning and optionally publish a UI-friendly step snapshot."""
 	thinking = model_output.current_state.thinking
 	if thinking:
 		print(f'💭 STRUCTURED THINKING — STEP {step_number}: {thinking}', flush=True)
+
+	event_path = os.getenv('QWEN38_UI_EVENT_PATH')
+	if not event_path:
+		return
+	payload = {
+		'step': step_number,
+		'url': browser_state.url,
+		'title': browser_state.title,
+		'thinking': thinking or '',
+		'screenshot': browser_state.screenshot,
+		'updated_at': time.time(),
+	}
+	destination = Path(event_path)
+	destination.parent.mkdir(parents=True, exist_ok=True)
+	temporary = destination.with_suffix('.tmp')
+	temporary.write_text(json.dumps(payload), encoding='utf-8')
+	temporary.replace(destination)
 
 
 async def mark_request_start(request: httpx.Request) -> None:
