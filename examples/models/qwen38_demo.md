@@ -20,6 +20,17 @@ export QWEN38_DFLASH2_BASE_URL='https://YOUR-ENDPOINT/v1'
 export QWEN38_DFLASH2_API_KEY='YOUR-KEY'
 ```
 
+For the Cerebras Cloud OpenAI-compatible endpoint, also override the model name:
+
+```bash
+export QWEN38_DFLASH2_BASE_URL='https://api.cerebras.ai/v1'
+export QWEN38_DFLASH2_API_KEY='YOUR-CEREBRAS-KEY'
+export QWEN38_DFLASH2_MODEL='qwen-3.8-27b'
+```
+
+The runner omits the SGLang-only `top_k` and `repetition_penalty` request fields for the exact
+`api.cerebras.ai` hostname while preserving them for the original Modal/DFlash2 deployment.
+
 Run the Amazon task:
 
 ```bash

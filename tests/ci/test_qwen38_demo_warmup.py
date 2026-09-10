@@ -6,7 +6,26 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from examples.models.qwen38_modal import wait_for_inference
+from examples.models.qwen38_modal import completion_extra_body, wait_for_inference
+
+
+@pytest.mark.parametrize('base_url', ['https://api.cerebras.ai/v1', 'HTTPS://API.CEREBRAS.AI:443/v1/'])
+def test_cerebras_cloud_omits_sglang_sampling_parameters(base_url: str) -> None:
+	body = completion_extra_body(base_url=base_url, effort='none', repetition_penalty=1.08)
+	assert body == {
+		'reasoning_effort': 'none',
+		'response_format': {'type': 'json_object'},
+	}
+
+
+def test_modal_endpoint_keeps_sglang_sampling_parameters() -> None:
+	body = completion_extra_body(base_url='https://demo.modal.run/v1', effort='none', repetition_penalty=1.08)
+	assert body['top_k'] == 20
+	assert body['repetition_penalty'] == 1.08
+
+	lookalike_body = completion_extra_body(base_url='https://api.cerebras.ai.example/v1', effort='none', repetition_penalty=1.08)
+	assert lookalike_body['top_k'] == 20
+	assert lookalike_body['repetition_penalty'] == 1.08
 
 
 @pytest.mark.asyncio

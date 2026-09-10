@@ -1,4 +1,4 @@
-"""Run a local Browser Use agent against Qwen3.8-27B on Modal.
+"""Run a local Browser Use agent against Qwen3.8-27B on an OpenAI-compatible endpoint.
 
 Set QWEN38_DFLASH2_BASE_URL and QWEN38_DFLASH2_API_KEY for your endpoint.
 See qwen38_demo.md for setup, the Amazon task, and inference configuration.
@@ -29,6 +29,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Literal, cast
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import httpx
@@ -50,6 +51,7 @@ FALLBACK_REPETITION_PENALTY = 1.08
 JUDGE_COMPLETION_TOKENS = 1_024
 JUDGE_REASONING_EFFORT = 'none'
 JUDGE_REPETITION_PENALTY = 1.0
+SGLANG_TOP_K = 20
 MAX_ACTIONS_PER_STEP = 5
 MAX_AGENT_STEPS = 100
 LLM_SCREENSHOT_SIZE = (960, 768)
@@ -206,7 +208,7 @@ class TimingProfiler:
 
 def parse_args() -> argparse.Namespace:
 	"""Parse command-line options for the local demo."""
-	parser = argparse.ArgumentParser(description='Run a local Browser Use task with Qwen3.8 on Modal.')
+	parser = argparse.ArgumentParser(description='Run a local Browser Use task with Qwen3.8.')
 	tasks = parser.add_mutually_exclusive_group()
 	tasks.add_argument('--task', help='Task text. If omitted, the CLI opens a multiline paste prompt.')
 	tasks.add_argument('--task-file', type=Path, help='Read a UTF-8 task file.')
@@ -246,7 +248,7 @@ def read_task(cli_task: str | None) -> str:
 
 
 def read_api_key() -> str:
-	"""Read the Modal API key without storing it in the repository."""
+	"""Read the endpoint API key without storing it in the repository."""
 	api_key = os.getenv('QWEN38_DFLASH2_API_KEY')
 	if api_key:
 		return api_key
@@ -294,6 +296,25 @@ def max_history_items() -> int | None:
 	if parsed <= 5:
 		raise ValueError('QWEN38_DFLASH2_MAX_HISTORY_ITEMS must be greater than 5 or `none`')
 	return parsed
+
+
+def completion_extra_body(
+	*, base_url: str, effort: Literal['none', 'low', 'medium', 'xhigh'], repetition_penalty: float
+) -> dict[str, Any]:
+	"""Build provider-compatible JSON-mode parameters for one completion."""
+	body: dict[str, Any] = {
+		'reasoning_effort': effort,
+		'response_format': {'type': 'json_object'},
+	}
+	if uses_sglang_sampling(base_url):
+		body.update(top_k=SGLANG_TOP_K, repetition_penalty=repetition_penalty)
+	return body
+
+
+def uses_sglang_sampling(base_url: str) -> bool:
+	"""Return whether the endpoint accepts the demo's SGLang-only sampling fields."""
+	hostname = (urlparse(base_url).hostname or '').lower()
+	return hostname != 'api.cerebras.ai'
 
 
 def print_structured_thinking(_browser_state: Any, model_output: Any, step_number: int) -> None:
@@ -399,7 +420,7 @@ async def wait_for_inference(client: httpx.AsyncClient, base_url: str, api_key: 
 		except (httpx.TimeoutException, httpx.ConnectError):
 			pass
 		await asyncio.sleep(max(0, min(10, deadline - time.monotonic())))
-	raise TimeoutError('Inference did not become ready within five minutes; check the Modal deployment.')
+	raise TimeoutError('Inference did not become ready within five minutes; check the endpoint deployment.')
 
 
 async def main(task: str, *, full_browser_capabilities: bool = False, chromium: bool = False, keep_open: bool = False) -> bool:
@@ -427,6 +448,9 @@ async def main(task: str, *, full_browser_capabilities: bool = False, chromium: 
 	thinking_normal = thinking_normal_sentences()
 	thinking_sentences = thinking_sentence_limit()
 	history_items = max_history_items()
+	sampling_profile = (
+		f'top_k={SGLANG_TOP_K}/repetition_penalty={REPETITION_PENALTY}' if uses_sglang_sampling(base_url) else 'provider-default'
+	)
 	if thinking_normal > thinking_sentences:
 		raise ValueError('QWEN38_DFLASH2_THINKING_NORMAL_SENTENCES cannot exceed the maximum')
 	async with httpx.AsyncClient() as warmup_client:
@@ -460,15 +484,11 @@ async def main(task: str, *, full_browser_capabilities: bool = False, chromium: 
 		temperature=AGENT_TEMPERATURE,
 		top_p=0.8,
 		frequency_penalty=None,
-		extra_body={
-			'reasoning_effort': effort,
-			'top_k': 20,
-			'repetition_penalty': REPETITION_PENALTY,
-			# JSON-object grammar is much lighter than the full schema grammar that
-			# previously caused runaway whitespace, but it prevents prose, fences,
-			# and Qwen's native <tool_call> serialization at generation time.
-			'response_format': {'type': 'json_object'},
-		},
+		extra_body=completion_extra_body(
+			base_url=base_url,
+			effort=effort,
+			repetition_penalty=REPETITION_PENALTY,
+		),
 		# SGLang's constrained JSON decoder occasionally emits thousands of
 		# whitespace/repeated tokens after a valid-looking answer. Put the schema
 		# in the prompt and let Browser Use validate the returned JSON instead.
@@ -492,13 +512,13 @@ async def main(task: str, *, full_browser_capabilities: bool = False, chromium: 
 		top_p=0.8,
 		frequency_penalty=None,
 		# If the primary generation still hits its guardrail, retry once in
-		# the same agent step with a stronger anti-repetition setting.
-		extra_body={
-			'reasoning_effort': effort,
-			'top_k': 20,
-			'repetition_penalty': FALLBACK_REPETITION_PENALTY,
-			'response_format': {'type': 'json_object'},
-		},
+		# the same agent step with a larger budget. SGLang endpoints also use
+		# a stronger anti-repetition setting.
+		extra_body=completion_extra_body(
+			base_url=base_url,
+			effort=effort,
+			repetition_penalty=FALLBACK_REPETITION_PENALTY,
+		),
 		add_schema_to_system_prompt=True,
 		dont_force_structured_output=True,
 		max_completion_tokens=FALLBACK_COMPLETION_TOKENS,
@@ -516,12 +536,11 @@ async def main(task: str, *, full_browser_capabilities: bool = False, chromium: 
 		temperature=AGENT_TEMPERATURE,
 		top_p=0.8,
 		frequency_penalty=None,
-		extra_body={
-			'reasoning_effort': JUDGE_REASONING_EFFORT,
-			'top_k': 20,
-			'repetition_penalty': JUDGE_REPETITION_PENALTY,
-			'response_format': {'type': 'json_object'},
-		},
+		extra_body=completion_extra_body(
+			base_url=base_url,
+			effort=JUDGE_REASONING_EFFORT,
+			repetition_penalty=JUDGE_REPETITION_PENALTY,
+		),
 		add_schema_to_system_prompt=True,
 		dont_force_structured_output=True,
 		max_completion_tokens=JUDGE_COMPLETION_TOKENS,
@@ -558,8 +577,8 @@ async def main(task: str, *, full_browser_capabilities: bool = False, chromium: 
 			f'⚙️  vision=auto/{LLM_SCREENSHOT_SIZE[0]}x{LLM_SCREENSHOT_SIZE[1]} | '
 			f'capabilities={"full" if full_browser_capabilities else "fast-navigation"} | '
 			f'max_actions_per_step={MAX_ACTIONS_PER_STEP} | max_steps={MAX_AGENT_STEPS} | '
-			f'max_output={MAX_COMPLETION_TOKENS} tok | repetition_penalty={REPETITION_PENALTY} | '
-			f'truncation_retry={FALLBACK_COMPLETION_TOKENS} tok/{FALLBACK_REPETITION_PENALTY} | '
+			f'max_output={MAX_COMPLETION_TOKENS} tok | sampling={sampling_profile} | '
+			f'truncation_retry={FALLBACK_COMPLETION_TOKENS} tok | '
 			f'clicks=verified/dialog-js/adaptive-600ms | loading_settle=800ms | fixed_network_wait=off | '
 			f'wait_tool={"on" if full_browser_capabilities else "off"} | '
 			f'downloads={"on" if full_browser_capabilities else "off"} | '
