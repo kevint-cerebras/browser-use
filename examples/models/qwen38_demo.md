@@ -120,7 +120,8 @@ restore the default earlier checkout boundary.
 
 The macOS launcher opens two isolated Chrome profiles before any agent prompt is
 submitted: a persistent Facebook Marketplace window on the right 75 percent of
-the main display and the prompt UI on the left 25 percent.
+the main display and the prompt UI on the left 25 percent. It uses local port
+`8766` so the Amazon harness can remain on `8765`.
 
 ```bash
 env -u BROWSER_USE_HEADLESS \

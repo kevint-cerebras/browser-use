@@ -207,7 +207,7 @@ def launch_demo(*, chrome_path: Path, harness_port: int, cdp_port: int) -> int:
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Launch the 25/75 Facebook Marketplace research demo.')
 	parser.add_argument('--chrome-path', type=Path, default=DEFAULT_CHROME_PATH)
-	parser.add_argument('--harness-port', type=int, default=8765)
+	parser.add_argument('--harness-port', type=int, default=8766)
 	parser.add_argument('--cdp-port', type=int, default=9223)
 	arguments = parser.parse_args()
 	raise SystemExit(
