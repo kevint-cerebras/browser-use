@@ -64,28 +64,22 @@ class RunAction(BaseModel):
 	action: Literal['stop', 'close_browser']
 
 
-class MarketplaceActionConfig(BaseModel):
-	"""Validated local-only authorization for bounded Marketplace outreach."""
+class MarketplaceVisionConfig(BaseModel):
+	"""Validated local-only target for a visual Marketplace search."""
 
 	target: str = Field(min_length=1, max_length=200)
-	destination: str = Field(min_length=1, max_length=200)
-	top_count: int = Field(ge=1, le=10)
-	offer_discount: float = Field(gt=0, le=1_000)
-	make_offers: bool = False
-	send_messages: bool = False
+	visual_criterion: str = Field(min_length=1, max_length=500)
+	max_results: int = Field(default=10, ge=1, le=50)
 
 	@classmethod
-	def from_environment(cls) -> MarketplaceActionConfig | None:
-		"""Load an ignored Marketplace override when all required values exist."""
+	def from_environment(cls) -> MarketplaceVisionConfig | None:
+		"""Load an ignored Marketplace vision target when configured."""
 		values = {
 			'target': os.getenv('QWEN38_MARKETPLACE_TARGET', '').strip(),
-			'destination': os.getenv('QWEN38_MARKETPLACE_DESTINATION', '').strip(),
-			'top_count': os.getenv('QWEN38_MARKETPLACE_TOP_COUNT', '').strip(),
-			'offer_discount': os.getenv('QWEN38_MARKETPLACE_OFFER_DISCOUNT', '').strip(),
-			'make_offers': os.getenv('QWEN38_MARKETPLACE_MAKE_OFFERS', '').strip(),
-			'send_messages': os.getenv('QWEN38_MARKETPLACE_SEND_MESSAGES', '').strip(),
+			'visual_criterion': os.getenv('QWEN38_MARKETPLACE_VISUAL_CRITERION', '').strip(),
+			'max_results': os.getenv('QWEN38_MARKETPLACE_MAX_RESULTS', '10').strip(),
 		}
-		if not all(values[key] for key in ('target', 'destination', 'top_count', 'offer_discount')):
+		if not values['target'] or not values['visual_criterion']:
 			return None
 		return cls.model_validate(values)
 
@@ -215,45 +209,33 @@ SAFETY BOUNDARY
 
 
 def optimized_marketplace_task(prompt: str) -> str:
-	"""Turn a Marketplace request into a systematic US listing search and report."""
-	config = MarketplaceActionConfig.from_environment()
-	if config and (config.make_offers or config.send_messages):
-		offer_action = f"""BOUNDED OUTREACH AUTHORIZATION
-This ignored local demo configuration explicitly authorizes outreach for the top {config.top_count} qualifying listings for {config.target} that ship to {config.destination}.
-- Rank qualifying listings by literal product match, confirmed shipping eligibility, condition, seller rating, and value.
-- For each of the top {config.top_count}, calculate an offer exactly ${config.offer_discount:.2f} below the currently displayed listing price. Show the arithmetic before acting. Never offer zero or a negative amount.
-- {'Use Facebook’s formal Make Offer control once per selected listing when it is available.' if config.make_offers else 'Do not use a formal Make Offer control.'}
-- {f'Send exactly one concise message per selected seller: “Hi, would you accept $OFFER for this item? I’m in {config.destination} and would need shipping. Thank you.” Replace $OFFER with the calculated amount.' if config.send_messages else 'Do not message sellers.'}
-- If no formal Offer control exists, the message may carry the proposal, but report that no formal offer was submitted.
-- Before each submission, verify the listing URL, displayed price, calculated offer, shipping availability, and that this seller has not already been contacted. Never contact more than {config.top_count} sellers.
-- Stop and report instead of acting if the price changed, shipping is unavailable or unclear, the item is not a literal match, the seller was already contacted, or any submission state is ambiguous."""
-	else:
-		offer_action = """READ-ONLY MODE
-Do not message sellers, make offers, save listings, reveal contact information, change the account, add anything to a cart, begin checkout, or make a purchase."""
+	"""Turn a Marketplace request into a screenshot-verified listing search."""
+	config = MarketplaceVisionConfig.from_environment()
+	target = config.target if config else 'the product described by the user'
+	visual_criterion = config.visual_criterion if config else 'the visual feature described by the user'
+	max_results = config.max_results if config else 10
 	return f"""USER REQUEST
 {prompt.strip()}
 
-LOCAL DEMO TARGET
-{f'Search specifically for {config.target} offered in the United States that can ship to {config.destination}.' if config else 'Interpret the requested product and destination literally; do not invent either.'}
+VISUAL SEARCH TARGET
+Search specifically for {target} offered in the United States. A listing qualifies only when its photos visibly satisfy this criterion: {visual_criterion}.
 
 MARKETPLACE SEARCH WORKFLOW
 1. Use only Facebook Marketplace. If login, CAPTCHA, passkey, OTP, or another authentication checkpoint appears, stop and ask the user to complete it manually.
 2. Search Marketplace listings available in the United States. Use the widest US radius and shipping/delivery coverage the interface permits. If Marketplace remains location-limited, sample multiple major US regions and state exactly which regions were covered.
 3. Search useful singular, plural, and common-title variants for the requested product. Scroll or paginate until no new qualifying results appear, the site imposes a limit, or the agent step budget is near exhaustion.
-4. Open plausible candidates and verify that each is an actual matching item currently offered for sale and can ship to the configured destination. Exclude unrelated products, parts, wanted ads, rentals, stock photos without an actual item, and pickup-only listings.
-5. Record title, price, condition, location, seller name, seller rating and rating count, delivery/shipping availability, listing URL, and relevant included details. Never infer a missing value; use “Not shown” when Facebook does not expose seller information.
-6. Deduplicate primarily by listing URL, then by matching title, price, location, and seller-visible details. Keep distinct listings from the same seller when they are clearly separate units.
-7. Apply the bounded outreach instructions below, then return the selected options, excluded near-matches, search variants, regions/filters covered, and explicit limitations. Never claim nationwide exhaustiveness when Facebook limits visible results.
+4. Use screenshot vision for every plausible candidate. Open the listing and enlarge or advance through its available product photos when needed. Do not classify from the title, description, accessibility text, or thumbnail alone.
+5. Include a listing only when at least one clear product photo shows the requested visual feature. For an open beak, require a visible gap between the upper and lower beak. Reject closed beaks, unclear thumbnails, occluded or out-of-frame beaks, illustrations when a statue is requested, and ambiguous side angles.
+6. Record the listing title, price, location, exact visual evidence, and canonical Marketplace URL. Never infer a visual feature that is not clearly visible.
+7. Deduplicate primarily by listing URL, then by matching photos, title, price, and location. Return up to {max_results} visually confirmed matches, plus concise coverage and exclusion notes. Never claim nationwide exhaustiveness when Facebook limits visible results.
 
-{offer_action}
-
-SAFETY BOUNDARY
-Never disclose a street address, email, phone number, credentials, or payment information to a seller. Never purchase, pay, create more than the authorized offers/messages, or navigate away from Facebook Marketplace except for an unavoidable Facebook login checkpoint.
+STRICT READ-ONLY BOUNDARY
+Do not message sellers, click Contact or Make Offer, save listings, reveal contact information, change the account, add anything to a cart, begin checkout, or make a purchase. A Facebook location-verification modal is an immediate blocker for outreach but does not prevent completing this read-only visual search. Close or leave that modal without retrying seller contact, then continue research.
 
 FINAL RESPONSE FORMAT
-Return one tab-separated line per selected listing using the OPTION marker followed by exactly these ten fields:
-OPTION<TAB>title<TAB>price<TAB>location<TAB>condition<TAB>seller name<TAB>seller rating and rating count<TAB>delivery or shipping<TAB>listing URL<TAB>offer amount and submission status<TAB>message status
-Do not put tab characters inside a field. After the options, return COVERAGE<TAB>followed by regions, filters, and title variants searched; LIMITATIONS<TAB>followed by any Facebook visibility limits; and EXCLUDED<TAB>followed by a concise summary of near-matches rejected. If no qualifying listings are visible, return no OPTION lines and explain why in LIMITATIONS. The frontend will supply the “Here are your options” heading."""
+Return one tab-separated line per visually verified listing using the MATCH marker followed by exactly these five fields:
+MATCH<TAB>title<TAB>price<TAB>location<TAB>specific visual evidence that the beak is open<TAB>listing URL
+Do not put tab characters inside a field. After the matches, return COVERAGE<TAB>followed by regions, filters, and title variants searched; LIMITATIONS<TAB>followed by any Facebook visibility limits; and EXCLUDED<TAB>followed by a concise summary of closed-beak, unclear, or unrelated candidates rejected. If no qualifying listings are visible, return no MATCH lines and explain why in LIMITATIONS. The frontend will supply the results heading."""
 
 
 def snapshot_payload(state: RunState) -> dict[str, object]:

@@ -169,6 +169,7 @@ def launch_demo(*, chrome_path: Path, harness_port: int, cdp_port: int) -> int:
 		environment.pop(name, None)
 	environment['BROWSER_USE_CDP_URL'] = cdp_url
 	environment['QWEN38_DEMO_MODE'] = 'marketplace'
+	environment['QWEN38_FORCE_VISION'] = 'true'
 	server = subprocess.Popen(
 		[sys.executable, str(HARNESS_PATH), '--host', '127.0.0.1', '--port', str(harness_port)],
 		cwd=REPO_ROOT,

@@ -136,27 +136,25 @@ ignored `.scout-marketplace-ui-profile`. The launcher attaches Browser Use over
 localhost CDP port `9223`; it does not use Browserbase or Browser Use Cloud.
 
 Marketplace mode is isolated from `.checkout.env`, so the Amazon purchase demo
-cannot affect it. By default, Marketplace work is read-only. An ignored local
-`.marketplace.env` can explicitly authorize a bounded outreach demo:
+cannot affect it. Marketplace work is strictly read-only. An ignored local
+`.marketplace.env` can configure a visual search target:
 
 ```dotenv
 QWEN38_MARKETPLACE_TARGET='YOUR ITEM'
-QWEN38_MARKETPLACE_DESTINATION='CITY, STATE ZIP'
-QWEN38_MARKETPLACE_TOP_COUNT=2
-QWEN38_MARKETPLACE_OFFER_DISCOUNT=2
-QWEN38_MARKETPLACE_MAKE_OFFERS=true
-QWEN38_MARKETPLACE_SEND_MESSAGES=true
+QWEN38_MARKETPLACE_VISUAL_CRITERION='THE FEATURE THAT MUST BE CLEARLY VISIBLE'
+QWEN38_MARKETPLACE_MAX_RESULTS=10
 ```
 
-With that configuration, the agent verifies US listings that ship to the
-destination, ranks two, offers exactly $2 below each displayed price, and sends
-one concise shipping-dependent offer message per seller. It never discloses a
-street address, contacts more than two sellers, repeats an action, checks out,
-or purchases. The frontend returns “Here are your options” cards with price,
-location, condition, seller rating, delivery, offer status, message status, and
-listing URL. Facebook can limit result visibility, geography, and pagination,
-so the result reports observed coverage and must not claim a provably exhaustive
-US inventory when the interface prevents one.
+The launcher forces screenshot vision on. The agent opens candidate listings,
+inspects product photos at useful size, and includes only items whose pixels
+clearly satisfy the configured feature. The geese-statue demo requires a visible
+gap between the upper and lower beak; closed, occluded, out-of-frame, thumbnail-
+only, and ambiguous beaks are rejected. The frontend returns cards with title,
+price, location, the specific visual evidence, and a clickable Marketplace URL.
+It never contacts sellers, makes offers, saves listings, checks out, or purchases.
+Facebook can limit result visibility, geography, and pagination, so the result
+reports observed coverage and must not claim a provably exhaustive US inventory
+when the interface prevents one.
 
 Quit the two dedicated Chrome windows when finished. `Ctrl+C` in the launcher
 terminal stops the local prompt server but deliberately leaves Chrome open so

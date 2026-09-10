@@ -461,6 +461,7 @@ async def main(task: str, *, full_browser_capabilities: bool = False, chromium: 
 	full_browser_capabilities = full_browser_capabilities or env_flag('QWEN38_DFLASH2_FULL_BROWSER_CAPABILITIES')
 	tools = build_tools(full_browser_capabilities=full_browser_capabilities)
 	model = os.getenv('QWEN38_DFLASH2_MODEL', DEFAULT_MODEL)
+	vision_mode: bool | Literal['auto'] = True if env_flag('QWEN38_FORCE_VISION') else 'auto'
 	effort = reasoning_effort()
 	thinking_normal = thinking_normal_sentences()
 	thinking_sentences = thinking_sentence_limit()
@@ -591,7 +592,7 @@ async def main(task: str, *, full_browser_capabilities: bool = False, chromium: 
 			f'structured_thinking={thinking_normal} sentences normally/<={thinking_sentences} hard | '
 			f'memory=off/thought-history={history_items or "all"} | lightning_mode=on | json_mode=on | '
 			f'temperature={AGENT_TEMPERATURE}\n'
-			f'⚙️  vision=auto/{LLM_SCREENSHOT_SIZE[0]}x{LLM_SCREENSHOT_SIZE[1]} | '
+			f'⚙️  vision={vision_mode}/{LLM_SCREENSHOT_SIZE[0]}x{LLM_SCREENSHOT_SIZE[1]} | '
 			f'capabilities={"full" if full_browser_capabilities else "fast-navigation"} | '
 			f'max_actions_per_step={MAX_ACTIONS_PER_STEP} | max_steps={MAX_AGENT_STEPS} | '
 			f'max_output={MAX_COMPLETION_TOKENS} tok | sampling={sampling_profile} | '
@@ -611,7 +612,7 @@ async def main(task: str, *, full_browser_capabilities: bool = False, chromium: 
 			judge_llm=judge_llm,
 			browser=browser,
 			tools=tools,
-			use_vision='auto',
+			use_vision=vision_mode,
 			vision_detail_level='low',
 			llm_screenshot_size=LLM_SCREENSHOT_SIZE,
 			flash_mode=True,
