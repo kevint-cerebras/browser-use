@@ -67,6 +67,35 @@ attach to an already-running debugging-enabled browser, or set
 `QWEN38_UI_BROWSER=playwright` only when you explicitly want the Playwright
 Chrome-for-Testing binary.
 
+### Sign in before the agent runs
+
+Use a dedicated local Chrome profile and sign in yourself before starting the
+harness. On macOS, from the repository root, launch Chrome with:
+
+```bash
+open -na 'Google Chrome' --args \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$PWD/.browser-use-profile" \
+  'https://www.amazon.com/ap/signin'
+```
+
+Complete Amazon sign-in manually in that window. Do not close it. In another
+terminal, launch the harness and attach Browser Use to the authenticated session:
+
+```bash
+env -u BROWSER_USE_HEADLESS \
+  BROWSER_USE_CDP_URL='http://127.0.0.1:9222' \
+  UV_CACHE_DIR="$PWD/.uv-cache" \
+  uv run --no-dev examples/models/qwen38_grokbot.py
+```
+
+The dedicated profile is ignored by Git and retains its cookies between demo
+runs. It avoids exposing the user's normal Chrome profile. Remote debugging
+grants browser control to local processes, so keep the port bound to loopback
+and quit this dedicated Chrome window after the demo. The agent still receives
+page state and screenshots and must retain the documented checkout safety stop.
+
 ## Inference recipe
 
 The original fast deployment used Qwen/Qwen3.8-27B-FP8 on two B200 GPUs in US West, tensor parallelism 2, DFlash2 speculative decoding with 8 draft tokens, BF16 KV cache, and one concurrent inference request. Its SGLang source was pinned to `746418a1ec78ff1231e452706ce560bcad787c39` with `trtllm_mha` attention and `flashinfer_trtllm` FP8 GEMM. The context budget was 262,144 tokens. This branch connects to an existing endpoint; it does not provision or deploy GPUs.
